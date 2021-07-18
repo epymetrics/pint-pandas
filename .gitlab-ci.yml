@@ -1,0 +1,104 @@
+image: python:latest
+
+stages:
+  - build
+  - test
+  - deploy
+  - release
+
+.windows-env: &windows-env
+  tags:
+    - shared-windows
+    - windows
+    - windows-1809
+  image: mcr.microsoft.com/windows/servercore:1809_amd64
+  before_script:
+    - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+    - choco install -y python --version=3.9.2
+    - RefreshEnv
+
+.osx-py39-env: &osx-py39-env
+  tags:
+    - mac
+  before_script:
+    - pyenv versions
+    - eval "$(pyenv init -)"  # enable pyenv
+    - pyenv shell 3.9.4
+    - python -m venv .venv # create a local temporary environment based off of the currently active python interpreter
+    - pyenv shell system # remove pyenv shim
+    - source .venv/bin/activate # activate the local temporary environment
+
+.osx-py38-env: &osx-py38-env
+  tags:
+    - mac
+  before_script:
+    - pyenv versions
+    - eval "$(pyenv init -)"  # enable pyenv
+    - pyenv shell 3.8.10
+    - python -m venv .venv # create a local temporary environment based off of the currently active python interpreter
+    - pyenv shell system # remove pyenv shim
+    - source .venv/bin/activate # activate the local temporary environment
+
+check-code-style:
+  stage: build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "epymetrics"'
+    - when: always
+      allow_failure: true
+  script:
+    - pip install black
+    - black --check pint_pandas
+
+build:
+  stage: build
+  script:
+    - python setup.py sdist bdist_wheel
+  artifacts:
+    paths:
+      - dist
+
+
+# ---------------------------------------------------------
+# Test package
+# ---------------------------------------------------------
+
+test.linux:
+  stage: test
+  script:
+    - pip install `echo dist/*.whl`[test]
+    - pytest
+
+test.osx.py38:
+  <<: *osx-py38-env
+  stage: test
+  script:
+    - pip install `echo dist/*.whl`[test]
+    - pytest
+
+.test.win:
+  <<: *windows-env
+  stage: test
+  script:
+    - echo (get-item dist\*.whl).FullName
+    - python -m pip install (get-item dist\*.whl).FullName
+    - python -m pip install pytest
+    - python -m pytest
+
+
+# ---------------------------------------------------------
+# Deploy package
+# ---------------------------------------------------------
+deploy-package:
+  image: python:3.9-slim-buster
+  stage: deploy
+  needs: [ build, test.linux ]
+  dependencies:
+    - build
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "epymetrics"'
+    - if: '$CI_COMMIT_MESSAGE =~ /\[push-dev-package\]/'
+  script:
+    - pip install twine
+    - TWINE_PASSWORD=${DEPLOY_PASSWORD} TWINE_USERNAME=${DEPLOY_USERNAME} python -m twine upload --repository-url https://gitlab.com/api/v4/projects/${DEPLOY_PROJECT_ID}/packages/pypi dist/*
