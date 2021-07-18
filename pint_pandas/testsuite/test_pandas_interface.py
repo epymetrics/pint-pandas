@@ -572,6 +572,10 @@ class TestPrinting(base.BasePrintingTests):
 
 class TestMissing(base.BaseMissingTests):
     @pytest.mark.xfail(run=True, reason="__iter__ / __len__ issue")
+    def test_fillna_no_op_returns_copy(self, data):
+        super().test_fillna_no_op_returns_copy(data)
+
+    @pytest.mark.xfail(run=True, reason="__iter__ / __len__ issue")
     def test_fillna_scalar(self, data_missing):
         valid = data_missing[1]
         result = data_missing.fillna(valid)
