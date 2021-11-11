@@ -1,4 +1,4 @@
-image: python:latest
+image: python:slim
 
 stages:
   - build
@@ -6,7 +6,7 @@ stages:
   - deploy
   - release
 
-.windows-env: &windows-env
+.windows-env:
   tags:
     - shared-windows
     - windows
@@ -17,7 +17,7 @@ stages:
     - choco install -y python --version=3.9.2
     - RefreshEnv
 
-.osx-py39-env: &osx-py39-env
+.osx-py39-env:
   tags:
     - mac
   before_script:
@@ -28,7 +28,7 @@ stages:
     - pyenv shell system # remove pyenv shim
     - source .venv/bin/activate # activate the local temporary environment
 
-.osx-py38-env: &osx-py38-env
+.osx-py38-env:
   tags:
     - mac
   before_script:
@@ -50,6 +50,8 @@ check-code-style:
     - black --check pint_pandas
 
 build:
+  # cannot use slim here - git is missing from slim but needed for automatic tagging of development releases
+  image: python:latest
   stage: build
   script:
     - python setup.py sdist bdist_wheel
@@ -62,21 +64,35 @@ build:
 # Test package
 # ---------------------------------------------------------
 
-test.linux:
+.test:
   stage: test
   script:
     - pip install `echo dist/*.whl`[test]
     - pytest
+
+test.linux.py38:
+  image: python:3.8-slim
+  extends: .test
+
+test.linux.py39:
+  image: python:3.9-slim
+  extends: .test
+
+test.linux.py310:
+  image: python:3.10
+  extends: .test
+
+test.linux.py311:
+  image: python:3.11-rc
+  extends: .test
 
 test.osx.py38:
-  <<: *osx-py38-env
-  stage: test
-  script:
-    - pip install `echo dist/*.whl`[test]
-    - pytest
+  extends:
+    - .osx-py38-env
+    - .test
 
 .test.win:
-  <<: *windows-env
+  extends: .windows-env
   stage: test
   script:
     - echo (get-item dist\*.whl).FullName
@@ -89,9 +105,8 @@ test.osx.py38:
 # Deploy package
 # ---------------------------------------------------------
 deploy-package:
-  image: python:3.9-slim-buster
   stage: deploy
-  needs: [ build, test.linux ]
+  needs: [ build, test.linux.py39 ]
   dependencies:
     - build
   variables:
