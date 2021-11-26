@@ -275,7 +275,6 @@ class TestInterface(base.BaseInterfaceTests):
 
 
 class TestMethods(base.BaseMethodsTests):
-    @pytest.mark.filterwarnings("ignore::pint.UnitStrippedWarning")
     # See test_setitem_mask_broadcast note
     @pytest.mark.parametrize("dropna", [True, False])
     def test_value_counts(self, all_data, dropna):
@@ -290,7 +289,6 @@ class TestMethods(base.BaseMethodsTests):
 
         self.assert_series_equal(result, expected)
 
-    @pytest.mark.filterwarnings("ignore::pint.UnitStrippedWarning")
     # See test_setitem_mask_broadcast note
     @pytest.mark.parametrize("box", [pd.Series, lambda x: x])
     @pytest.mark.parametrize("method", [lambda x: x.unique(), pd.unique])
